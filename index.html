@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LogiTrack — Controle de Estoque</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .kpi-blue { background: linear-gradient(120deg, #2D6FE3 0%, #63A4FF 100%); }
+    .kpi-green { background: linear-gradient(120deg, #288A62 0%, #55BE8A 100%); }
+    .kpi-orange { background: linear-gradient(120deg, #E3741E 0%, #F5A35E 100%); }
+    .kpi-purple { background: linear-gradient(120deg, #5F57F5 0%, #8F89FF 100%); }
+    .kpi-red { background: linear-gradient(120deg, #C81E1E 0%, #F05252 100%); }
+    tr.linha-selecionada { background-color: #EFF6FF !important; }
+    tr.linha-selecionada td:first-child { box-shadow: inset 4px 0 0 #4A6CF7; }
+  </style>
+</head>
+<body class="bg-[#F4F6F9] text-slate-800 min-h-screen overflow-x-hidden">
+
+  <!-- TELA DE LOGIN DEDICADA -->
+  <div id="tela-login" class="min-h-screen flex items-center justify-center bg-[#162230] px-4 py-8">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-2xl p-7">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-11 h-11 rounded-lg bg-[#1B2A3A] text-amber-400 flex items-center justify-center text-xl">
+          📦
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">LogiTrack</h1>
+          <p class="text-xs text-slate-500">Acesso ao Sistema de Gestão de Estoque</p>
+        </div>
+      </div>
+
+      <form id="form-login" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">E-mail ou Matrícula</label>
+          <input
+            type="text"
+            id="login-identificador"
+            required
+            placeholder="Digite sua matrícula ou e-mail"
+            class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#4A6CF7]"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Senha</label>
+          <input
+            type="password"
+            id="login-senha"
+            required
+            placeholder="Digite sua senha"
+            class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#4A6CF7]"
+          />
+        </div>
+
+        <p id="login-erro" class="text-xs text-rose-600 font-medium hidden"></p>
+
+        <button
+          type="submit"
+          class="w-full py-2.5 px-4 rounded-lg bg-[#4A6CF7] hover:bg-[#3B5CE6] text-white text-sm font-semibold transition cursor-pointer"
+        >
+          Entrar no Sistema
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- APLICAÇÃO PRINCIPAL -->
+  <div id="app-shell" class="hidden min-h-screen w-full">
+
+    <!-- SIDEBAR ESCURA -->
+    <aside class="w-60 bg-[#1B2A3A] text-slate-200 flex flex-col justify-between shrink-0">
+      <div>
+        <div class="h-14 flex items-center gap-2.5 px-5 bg-[#162230]">
+          <span class="text-amber-400 text-lg">📦</span>
+          <span class="text-white font-bold text-base tracking-tight">LogiTrack</span>
+        </div>
+
+        <div class="px-3 py-5">
+          <p class="px-3 text-xs font-medium text-slate-400 mb-3">Menu Principal</p>
+          <nav class="space-y-1">
+            <button onclick="selecionarSecao('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-3 py-2 rounded-md bg-white/10 text-white text-sm font-medium transition cursor-pointer">
+              <span class="text-xs">📊</span> Dashboard
+            </button>
+            <button onclick="selecionarSecao('produtos', 'todos')" id="nav-todos" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+              <span class="text-xs">📦</span> Produtos
+            </button>
+            <button onclick="selecionarSecao('produtos', 'baixo')" id="nav-baixo" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+              <span class="text-xs">⚠️</span> Estoque Baixo
+            </button>
+            <button onclick="selecionarSecao('produtos', 'esgotado')" id="nav-esgotado" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+              <span class="text-xs">🚫</span> Esgotados
+            </button>
+            <button onclick="abrirModal('entrada')" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+              <span class="text-xs">⬇️</span> Registrar Entrada
+            </button>
+            <button onclick="abrirModal('saida')" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+              <span class="text-xs">⬆️</span> Registrar Saída
+            </button>
+            <button onclick="selecionarSecao('movimentacoes')" id="nav-movimentacoes" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+              <span class="text-xs">🧾</span> Histórico Entr./Saídas
+            </button>
+          </nav>
+
+          <div id="menu-admin" class="hidden mt-6 pt-5 border-t border-white/10">
+            <p class="px-3 text-xs font-medium text-slate-400 mb-3">Administração</p>
+            <nav class="space-y-1">
+              <button onclick="selecionarSecao('usuarios')" id="nav-usuarios" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+                <span class="text-xs">👤</span> Cadastrar Usuário
+              </button>
+              <button onclick="selecionarSecao('logs')" id="nav-logs" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-white/5 hover:text-white text-sm transition cursor-pointer">
+                <span class="text-xs">🕒</span> Logs de Acesso
+              </button>
+            </nav>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 bg-[#15212E]">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+            <span id="status-text" class="text-sm font-semibold text-white">Sistema Online</span>
+          </div>
+          <span id="status-dot-right" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        </div>
+        <p id="ultima-atualizacao" class="text-xs text-slate-400 mt-1.5">Atualizado agora</p>
+      </div>
+    </aside>
+
+    <!-- ÁREA DIREITA -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <header class="h-14 bg-white px-7 flex items-center justify-end border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="text-right leading-tight">
+            <div id="usuario-nome-exibido" class="text-xs font-semibold text-slate-800">Usuário</div>
+            <div id="usuario-meta-exibido" class="text-[11px] text-slate-400">Acesso registrado</div>
+          </div>
+          <div id="usuario-iniciais" class="w-8 h-8 rounded-full bg-[#1B2A3A] text-white flex items-center justify-center text-xs font-bold">
+            LT
+          </div>
+          <button
+            onclick="sairSistema()"
+            class="px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-600 transition cursor-pointer"
+          >
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <!-- CARDS KPI GLOBAIS -->
+      <div id="bloco-kpis" class="px-7 pt-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div class="kpi-blue rounded-lg p-4 text-white relative overflow-hidden min-h-[108px] flex flex-col justify-between">
+            <span class="pointer-events-none select-none absolute -right-2 -bottom-3 text-6xl opacity-20">📦</span>
+            <div class="w-7 h-7 rounded bg-white/25 flex items-center justify-center text-xs">📦</div>
+            <div>
+              <div id="kpi-total-produtos" class="text-2xl font-bold leading-tight">0</div>
+              <div class="text-xs text-white/95 mt-0.5">Total de Produtos</div>
+            </div>
+          </div>
+
+          <div class="kpi-green rounded-lg p-4 text-white relative overflow-hidden min-h-[108px] flex flex-col justify-between">
+            <span class="pointer-events-none select-none absolute -right-2 -bottom-3 text-6xl opacity-20">📊</span>
+            <div class="w-7 h-7 rounded bg-white/25 flex items-center justify-center text-xs">📊</div>
+            <div>
+              <div id="kpi-total-unidades" class="text-2xl font-bold leading-tight">0</div>
+              <div class="text-xs text-white/95 mt-0.5">Unidades Restantes</div>
+            </div>
+          </div>
+
+          <div class="kpi-orange rounded-lg p-4 text-white relative overflow-hidden min-h-[108px] flex flex-col justify-between">
+            <span class="pointer-events-none select-none absolute -right-2 -bottom-3 text-6xl opacity-20">💰</span>
+            <div class="w-7 h-7 rounded bg-white/25 flex items-center justify-center text-xs">💰</div>
+            <div>
+              <div id="kpi-valor-patrimonial" class="text-2xl font-bold leading-tight">R$ 0,00</div>
+              <div class="text-xs text-white/95 mt-0.5">Valor Patrimonial</div>
+            </div>
+          </div>
+
+          <div class="kpi-purple rounded-lg p-4 text-white relative overflow-hidden min-h-[108px] flex flex-col justify-between">
+            <span class="pointer-events-none select-none absolute -right-2 -bottom-3 text-6xl opacity-20">⚠️</span>
+            <div class="w-7 h-7 rounded bg-white/25 flex items-center justify-center text-xs">⚠️</div>
+            <div>
+              <div id="kpi-estoque-baixo" class="text-2xl font-bold leading-tight">0</div>
+              <div class="text-xs text-white/95 mt-0.5">Itens em Estoque Baixo</div>
+            </div>
+          </div>
+
+          <div class="kpi-red rounded-lg p-4 text-white relative overflow-hidden min-h-[108px] flex flex-col justify-between">
+            <span class="pointer-events-none select-none absolute -right-2 -bottom-3 text-6xl opacity-20">🚫</span>
+            <div class="w-7 h-7 rounded bg-white/25 flex items-center justify-center text-xs">🚫</div>
+            <div>
+              <div id="kpi-esgotados" class="text-2xl font-bold leading-tight">0</div>
+              <div class="text-xs text-white/95 mt-0.5">Produtos Esgotados</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 0: DASHBOARD ANALÍTICO -->
+      <section id="secao-dashboard" class="px-7 py-5 space-y-5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">📊</span>
+            <h1 class="text-xl font-bold text-slate-900">Dashboard Executivo</h1>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div class="lg:col-span-8 bg-white rounded-lg p-5">
+            <h2 class="text-sm font-bold text-slate-900 mb-1">Entradas vs. Saídas vs. Restante por Produto</h2>
+            <p class="text-xs text-slate-400 mb-4">Acompanhamento automático do total que entrou, o que saiu e o saldo atual.</p>
+            <div class="h-72">
+              <canvas id="grafico-fluxo"></canvas>
+            </div>
+          </div>
+
+          <div class="lg:col-span-4 bg-white rounded-lg p-5 flex flex-col justify-between">
+            <div>
+              <h2 class="text-sm font-bold text-slate-900 mb-1">Situação do Catálogo</h2>
+              <p class="text-xs text-slate-400 mb-4">Normal, Baixo Estoque ou Esgotado (zero).</p>
+            </div>
+            <div class="h-60 flex items-center justify-center">
+              <canvas id="grafico-status"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold text-slate-900">Últimas Movimentações (Entradas e Saídas)</h2>
+            <button onclick="selecionarSecao('movimentacoes')" class="text-xs text-[#4A6CF7] hover:underline font-medium cursor-pointer">
+              Ver histórico completo →
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-[#F8FAFC] text-slate-700 text-xs font-semibold">
+                  <th class="py-2 px-3">Data / Hora Mov.</th>
+                  <th class="py-2 px-3">Produto</th>
+                  <th class="py-2 px-3">Tipo</th>
+                  <th class="py-2 px-3">Qtd. Mov.</th>
+                  <th class="py-2 px-3">Total Entradas</th>
+                  <th class="py-2 px-3">Restante</th>
+                  <th class="py-2 px-3">Última Entrada</th>
+                  <th class="py-2 px-3">Última Saída</th>
+                  <th class="py-2 px-3">Responsável</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-mov-dashboard" class="divide-y divide-slate-100 text-xs text-slate-700">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEÇÃO 1: CONTROLE DE ESTOQUE (PRODUTOS) -->
+      <main id="secao-produtos" class="hidden px-7 py-5 space-y-5">
+
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl text-amber-700">📦</span>
+            <h1 id="titulo-secao-produtos" class="text-xl font-bold text-slate-900">Controle de Estoque</h1>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="filtrarStatus('normal')" class="px-3 py-1.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 cursor-pointer">Normal</button>
+            <button onclick="filtrarStatus('baixo')" class="px-3 py-1.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 cursor-pointer">Baixo Estoque</button>
+            <button onclick="filtrarStatus('esgotado')" class="px-3 py-1.5 rounded text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 cursor-pointer">Esgotados</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+          <div class="lg:col-span-9 bg-white rounded-lg p-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div class="flex items-center gap-2">
+                <span class="text-amber-700 text-base">📦</span>
+                <h2 class="text-base font-bold text-slate-900">Produtos e Saldo em Tempo Real</h2>
+              </div>
+              <div id="info-selecao-produto" class="text-xs text-slate-500">
+                Clique em uma linha para selecionar, editar ou excluir
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-[#F8FAFC] text-slate-700 text-xs font-semibold">
+                    <th class="py-2.5 px-2.5">Código</th>
+                    <th class="py-2.5 px-2.5">Produto</th>
+                    <th class="py-2.5 px-2.5">Preço Unit.</th>
+                    <th class="py-2.5 px-2.5">Total Entrada</th>
+                    <th class="py-2.5 px-2.5">Total Saída</th>
+                    <th class="py-2.5 px-2.5">Restante</th>
+                    <th class="py-2.5 px-2.5">Data/Hora Entrada</th>
+                    <th class="py-2.5 px-2.5">Data/Hora Saída</th>
+                    <th class="py-2.5 px-2.5">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tabela-produtos" class="divide-y divide-slate-100 text-xs text-slate-700">
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="lg:col-span-3 bg-white rounded-lg p-5">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="text-sm">⚡</span>
+              <h2 class="text-base font-bold text-slate-900">Ações Rápidas</h2>
+            </div>
+
+            <div class="space-y-3">
+              <button
+                onclick="abrirModal('entrada')"
+                class="w-full py-2.5 px-4 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-sm font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <span>⬇️</span> Registrar Entrada
+              </button>
+
+              <button
+                onclick="abrirModal('saida')"
+                class="w-full py-2.5 px-4 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-sm font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <span>⬆️</span> Registrar Saída
+              </button>
+
+              <button
+                id="btn-editar-produto"
+                type="button"
+                disabled
+                onclick="abrirModalEditarSelecionado()"
+                class="w-full py-2.5 px-4 rounded-md bg-amber-500 hover:bg-amber-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed text-white border border-transparent text-sm font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <span>✏️</span> Editar Selecionado
+              </button>
+
+              <button
+                id="btn-excluir-produto"
+                type="button"
+                disabled
+                onclick="excluirProdutoSelecionado()"
+                class="w-full py-2.5 px-4 rounded-md bg-rose-600 hover:bg-rose-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed text-white border border-transparent text-sm font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <span>🗑️</span> Excluir Produto
+              </button>
+
+              <button
+                onclick="abrirModal('cadastro')"
+                class="w-full py-2.5 px-4 rounded-md bg-[#4A6CF7] hover:bg-[#3B5CE6] text-white text-sm font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <span>+</span> Cadastrar Produtos
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      <!-- SEÇÃO 2: HISTÓRICO COMPLETO DE ENTRADAS E SAÍDAS -->
+      <section id="secao-movimentacoes" class="hidden px-7 py-5 space-y-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-slate-900">Histórico de Entradas e Saídas</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Registro automático de cada movimentação com data/hora de entrada, data/hora de saída, total acumulado e saldo restante.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="abrirModal('entrada')" class="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium cursor-pointer">
+              ⬇️ Nova Entrada
+            </button>
+            <button onclick="abrirModal('saida')" class="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium cursor-pointer">
+              ⬆️ Nova Saída
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-5">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-[#F8FAFC] text-slate-700 text-xs font-semibold">
+                  <th class="py-2.5 px-3">Data / Hora Registro</th>
+                  <th class="py-2.5 px-3">Produto</th>
+                  <th class="py-2.5 px-3">Operação</th>
+                  <th class="py-2.5 px-3">Qtd. Mov.</th>
+                  <th class="py-2.5 px-3">Total Entrada</th>
+                  <th class="py-2.5 px-3">Saldo Anterior</th>
+                  <th class="py-2.5 px-3">Restante Atual</th>
+                  <th class="py-2.5 px-3">Data/Hora Entrada</th>
+                  <th class="py-2.5 px-3">Data/Hora Saída</th>
+                  <th class="py-2.5 px-3">Usuário</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-movimentacoes" class="divide-y divide-slate-100 text-xs text-slate-700">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEÇÃO 3: CADASTRO DE USUÁRIO PELO ADMIN -->
+      <section id="secao-usuarios" class="hidden px-7 py-5 space-y-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-slate-900">Cadastro de Usuários</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Cadastre colaboradores, edite dados ou remova acessos.</p>
+          </div>
+          <button
+            onclick="selecionarSecao('dashboard')"
+            class="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 cursor-pointer"
+          >
+            ← Voltar ao Dashboard
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          <div class="lg:col-span-5 bg-white rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 id="titulo-form-usuario" class="text-base font-bold text-slate-900">Novo Usuário</h2>
+              <button
+                type="button"
+                id="btn-cancelar-edicao-usr"
+                onclick="cancelarEdicaoUsuario()"
+                class="hidden text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+              >
+                Cancelar edição
+              </button>
+            </div>
+
+            <form id="form-usuario" class="space-y-4">
+              <input type="hidden" id="usr-id-edicao" />
+
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Nome Completo *</label>
+                <input type="text" id="usr-nome-completo" required placeholder="Ex: Maria da Silva Souza" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Função *</label>
+                  <input type="text" id="usr-funcao" required placeholder="Ex: Conferente, Operador..." class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">CPF *</label>
+                  <input type="text" id="usr-cpf" required placeholder="000.000.000-00" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">E-mail *</label>
+                  <input type="email" id="usr-email" required placeholder="usuario@empresa.com" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Matrícula *</label>
+                  <input type="text" id="usr-matricula" required placeholder="Ex: MAT102" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Sexo *</label>
+                  <select id="usr-sexo" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500">
+                    <option value="">Selecione...</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Feminino">Feminino</option>
+                    <option value="Outro">Outro</option>
+                    <option value="Não informado">Não informado</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Perfil *</label>
+                  <select id="usr-perfil" class="w-full rounded border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500">
+                    <option value="usuario">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+                <div>
+                  <label id="label-usr-senha" class="block text-xs font-medium text-slate-600 mb-1">Senha de Acesso *</label>
+                  <input type="password" id="usr-senha" minlength="4" placeholder="Crie uma senha" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              <p id="usr-feedback" class="text-xs font-medium hidden"></p>
+
+              <div class="flex justify-end pt-2">
+                <button type="submit" id="btn-salvar-usuario" class="px-4 py-2.5 rounded-lg bg-[#4A6CF7] hover:bg-[#3B5CE6] text-white text-sm font-medium transition cursor-pointer">
+                  Salvar Usuário
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="lg:col-span-7 bg-white rounded-lg p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-4">Usuários Cadastrados</h2>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-[#F8FAFC] text-slate-700 text-xs font-semibold">
+                    <th class="py-2.5 px-3">Matrícula</th>
+                    <th class="py-2.5 px-3">Nome</th>
+                    <th class="py-2.5 px-3">Função</th>
+                    <th class="py-2.5 px-3">E-mail</th>
+                    <th class="py-2.5 px-3">Perfil</th>
+                    <th class="py-2.5 px-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="tabela-usuarios" class="divide-y divide-slate-100 text-xs text-slate-700">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEÇÃO 4: LOGS DE ACESSO -->
+      <section id="secao-logs" class="hidden px-7 py-5 space-y-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-slate-900">Logs de Acesso</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Registro de quem acessou o sistema, período de atividade e status ATIVO / INATIVO.</p>
+          </div>
+          <button
+            type="button"
+            id="btn-atualizar-logs"
+            onclick="atualizarLogsPainel()"
+            class="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 cursor-pointer"
+          >
+            Atualizar Logs
+          </button>
+        </div>
+
+        <div class="bg-white rounded-lg p-6">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-[#F8FAFC] text-slate-700 text-xs font-semibold">
+                  <th class="py-2.5 px-3">Data / Hora Entrada</th>
+                  <th class="py-2.5 px-3">Identificador (E-mail/Matrícula)</th>
+                  <th class="py-2.5 px-3">Período / Horário</th>
+                  <th class="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-logs" class="divide-y divide-slate-100 text-xs text-slate-700">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRAR PRODUTOS -->
+  <div id="modal-cadastro" class="fixed inset-0 bg-slate-900/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-slate-900">Cadastrar Produtos</h3>
+        <button onclick="fecharModais()" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">&times;</button>
+      </div>
+
+      <form id="form-cadastro" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nome do Produto</label>
+          <input type="text" id="cad-nome" required placeholder="Ex: Caixa Organizadora" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Preço (R$)</label>
+            <input type="text" id="cad-preco" inputmode="decimal" required placeholder="1.500,00" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Qtd. Entrada</label>
+            <input type="number" id="cad-qtd" min="0" value="0" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Estoque Mín.</label>
+            <input type="number" id="cad-min" min="0" value="5" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="fecharModais()" class="px-3.5 py-2 rounded text-slate-600 hover:bg-slate-100 text-sm cursor-pointer">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded bg-[#4A6CF7] hover:bg-[#3B5CE6] text-white text-sm font-medium cursor-pointer">Cadastrar Produtos</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR PRODUTO SELECIONADO -->
+  <div id="modal-editar" class="fixed inset-0 bg-slate-900/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-lg max-w-lg w-full p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-slate-900">Editar Produto</h3>
+        <button onclick="fecharModais()" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">&times;</button>
+      </div>
+
+      <form id="form-editar" class="space-y-3.5">
+        <input type="hidden" id="edit-id" />
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nome do Produto</label>
+          <input type="text" id="edit-nome" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Preço (R$)</label>
+            <input type="text" id="edit-preco" inputmode="decimal" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Quantidade</label>
+            <input type="number" id="edit-quantidade" min="0" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Categoria</label>
+            <input type="text" id="edit-categoria" placeholder="Geral" class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Estoque Mín.</label>
+            <input type="number" id="edit-min" min="0" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+
+        <p id="edit-erro" class="text-xs text-rose-600 font-medium hidden"></p>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="fecharModais()" class="px-3.5 py-2 rounded text-slate-600 hover:bg-slate-100 text-sm cursor-pointer">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded bg-[#4A6CF7] hover:bg-[#3B5CE6] text-white text-sm font-medium cursor-pointer">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ENTRADA / SAÍDA -->
+  <div id="modal-movimentacao" class="fixed inset-0 bg-slate-900/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="titulo-mov" class="text-base font-bold text-slate-900">Registrar Entrada</h3>
+        <button onclick="fecharModais()" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">&times;</button>
+      </div>
+
+      <form id="form-movimentacao" class="space-y-3.5">
+        <input type="hidden" id="mov-tipo" value="entrada" />
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Produto</label>
+          <select id="mov-produto" onchange="atualizarResumoModalMov()" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500"></select>
+        </div>
+
+        <div id="mov-resumo-produto" class="rounded-md bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 space-y-1">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Quantidade</label>
+          <input type="number" id="mov-qtd" min="1" value="1" required class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Observação (opcional)</label>
+          <input type="text" id="mov-obs" placeholder="Ex: Nota fiscal 123, reposição, venda..." class="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <p id="mov-erro" class="text-xs text-rose-600 font-medium hidden"></p>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="fecharModais()" class="px-3.5 py-2 rounded text-slate-600 hover:bg-slate-100 text-sm cursor-pointer">Cancelar</button>
+          <button type="submit" id="btn-confirmar-mov" class="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium cursor-pointer">Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = window.__LOGITRACK_API_URL__ || "http://localhost:8000";
+    const SESSOES_KEY = "logitrack_sessoes_log";
+    const SESSAO_ATIVA_KEY = "logitrack_sessao_ativa_id";
+
+    let produtosCache = [];
+    let movimentacoesCache = [];
+    let usuariosCache = [];
+    let filtroStatusAtual = "todos";
+    let secaoAtual = "dashboard";
+    let usuarioLogado = null;
+    let produtoSelecionadoId = null;
+
+    let graficoFluxo = null;
+    let graficoStatus = null;
+
+    function lerSessoesLog() {
+      try {
+        return JSON.parse(localStorage.getItem(SESSOES_KEY) || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function salvarSessoesLog(lista) {
+      localStorage.setItem(SESSOES_KEY, JSON.stringify(lista));
+    }
+
+    function formatarHoraSomente(isoString) {
+      if (!isoString) return "—";
+      const d = new Date(isoString);
+      if (Number.isNaN(d.getTime())) return isoString;
+      return d.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+
+    function parseMoeda(valor) {
+      if (typeof valor === "number") return valor;
+      const limpo = String(valor || "0")
+        .replace(/[^\d,.-]/g, "")
+        .replace(/\.(?=\d{3}(?:,|$))/g, "")
+        .replace(",", ".");
+      const num = parseFloat(limpo);
+      return Number.isNaN(num) ? 0 : num;
+    }
+
+    function formatarMoeda(valor) {
+      return Number(valor || 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL"
+      });
+    }
+
+    function formatarDataHora(isoString) {
+      if (!isoString) return "—";
+      const data = new Date(isoString);
+      if (Number.isNaN(data.getTime())) return isoString;
+      return data.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+
+    function obterStatusProduto(p) {
+      const qtd = Number(p.quantidade ?? 0);
+      const min = Number(p.estoque_minimo ?? 5);
+      if (qtd <= 0) {
+        return { chave: "esgotado", label: "Esgotado", classe: "bg-rose-100 text-rose-700" };
+      }
+      if (qtd <= min) {
+        return { chave: "baixo", label: "Baixo Estoque", classe: "bg-amber-100 text-amber-800" };
+      }
+      return { chave: "normal", label: "Normal", classe: "bg-emerald-100 text-emerald-800" };
+    }
+
+    function atualizarBotaoEditar() {
+      const btnEditar = document.getElementById("btn-editar-produto");
+      const btnExcluir = document.getElementById("btn-excluir-produto");
+      const info = document.getElementById("info-selecao-produto");
+      const prod = produtosCache.find(p => p.id === produtoSelecionadoId);
+
+      if (btnEditar) btnEditar.disabled = !prod;
+      if (btnExcluir) btnExcluir.disabled = !prod;
+
+      if (info) {
+        if (prod) {
+          info.innerHTML = `Selecionado: <strong class="text-slate-800">${prod.nome}</strong> (#${prod.id})`;
+        } else {
+          info.textContent = "Clique em uma linha para selecionar, editar ou excluir";
+        }
+      }
+    }
+
+    async function excluirProdutoSelecionado() {
+      if (!produtoSelecionadoId) return;
+      const prod = produtosCache.find(p => p.id === produtoSelecionadoId);
+      if (!prod) return;
+
+      if (!confirm(`Deseja realmente excluir o produto "${prod.nome}" (#${prod.id})?`)) return;
+
+      const responsavel = encodeURIComponent(
+        usuarioLogado?.nome_completo || usuarioLogado?.funcao || usuarioLogado?.nome_social || "Sistema"
+      );
+      const resp = await fetch(`${API_URL}/products/${prod.id}?usuario_nome=${responsavel}`, {
+        method: "DELETE"
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.detail || "Não foi possível excluir o produto.");
+        return;
+      }
+
+      produtoSelecionadoId = null;
+      atualizarBotaoEditar();
+      await atualizarTudo();
+    }
+
+    function selecionarProduto(id, linhaEl) {
+      produtoSelecionadoId = id;
+      document.querySelectorAll("#tabela-produtos tr").forEach(tr => tr.classList.remove("linha-selecionada"));
+      if (linhaEl) linhaEl.classList.add("linha-selecionada");
+      atualizarBotaoEditar();
+    }
+
+    function abrirModalEditarSelecionado() {
+      if (!produtoSelecionadoId) return;
+      const prod = produtosCache.find(p => p.id === produtoSelecionadoId);
+      if (!prod) return;
+
+      document.getElementById("edit-id").value = prod.id;
+      document.getElementById("edit-nome").value = prod.nome || "";
+      document.getElementById("edit-preco").value = Number(prod.preco || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+      document.getElementById("edit-quantidade").value = Number(prod.quantidade ?? 0);
+      document.getElementById("edit-categoria").value = prod.categoria || "Geral";
+      document.getElementById("edit-min").value = prod.estoque_minimo ?? 5;
+
+      const erroEl = document.getElementById("edit-erro");
+      erroEl.textContent = "";
+      erroEl.classList.add("hidden");
+
+      const modal = document.getElementById("modal-editar");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function abrirModal(tipo) {
+      fecharModais();
+      if (tipo === "cadastro") {
+        const modal = document.getElementById("modal-cadastro");
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        return;
+      }
+
+      const modal = document.getElementById("modal-movimentacao");
+      const titulo = document.getElementById("titulo-mov");
+      const tipoInput = document.getElementById("mov-tipo");
+      const btnConfirmar = document.getElementById("btn-confirmar-mov");
+      const erroEl = document.getElementById("mov-erro");
+
+      tipoInput.value = tipo;
+      erroEl.textContent = "";
+      erroEl.classList.add("hidden");
+
+      if (tipo === "entrada") {
+        titulo.textContent = "Registrar Entrada";
+        btnConfirmar.className = "px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium cursor-pointer";
+      } else {
+        titulo.textContent = "Registrar Saída";
+        btnConfirmar.className = "px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium cursor-pointer";
+      }
+
+      const select = document.getElementById("mov-produto");
+      select.innerHTML = produtosCache
+        .map(p => `<option value="${p.id}">${p.nome} (Saldo: ${p.quantidade})</option>`)
+        .join("");
+
+      if (produtoSelecionadoId && produtosCache.some(p => p.id === produtoSelecionadoId)) {
+        select.value = String(produtoSelecionadoId);
+      }
+
+      atualizarResumoModalMov();
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function fecharModais() {
+      ["modal-cadastro", "modal-movimentacao", "modal-editar"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.add("hidden");
+          el.classList.remove("flex");
+        }
+      });
+    }
+
+    function atualizarResumoModalMov() {
+      const id = Number(document.getElementById("mov-produto").value);
+      const prod = produtosCache.find(p => p.id === id);
+      const resumo = document.getElementById("mov-resumo-produto");
+      if (!prod) {
+        resumo.innerHTML = "Nenhum produto selecionado.";
+        return;
+      }
+      const st = obterStatusProduto(prod);
+      resumo.innerHTML = `
+        <div><strong>Saldo atual:</strong> ${prod.quantidade} un. | <strong>Estoque mín.:</strong> ${prod.estoque_minimo} | <strong>Status:</strong> ${st.label}</div>
+        <div><strong>Total entradas:</strong> ${prod.total_entradas ?? 0} | <strong>Total saídas:</strong> ${prod.total_saidas ?? 0}</div>
+      `;
+    }
+
+    function selecionarSecao(secao, filtro = null) {
+      secaoAtual = secao;
+      if (filtro) filtroStatusAtual = filtro;
+
+      ["secao-dashboard", "secao-produtos", "secao-movimentacoes", "secao-usuarios", "secao-logs"].forEach(id => {
+        document.getElementById(id).classList.add("hidden");
+      });
+
+      const blocoKpis = document.getElementById("bloco-kpis");
+      if (secao === "dashboard" || secao === "produtos") {
+        blocoKpis.classList.remove("hidden");
+      } else {
+        blocoKpis.classList.add("hidden");
+      }
+
+      if (secao === "dashboard") {
+        document.getElementById("secao-dashboard").classList.remove("hidden");
+        renderizarDashboard();
+      } else if (secao === "produtos") {
+        document.getElementById("secao-produtos").classList.remove("hidden");
+        const titulos = {
+          todos: "Controle de Estoque",
+          normal: "Produtos em Estoque Normal",
+          baixo: "Produtos em Estoque Baixo",
+          esgotado: "Produtos Esgotados"
+        };
+        document.getElementById("titulo-secao-produtos").textContent = titulos[filtroStatusAtual] || "Controle de Estoque";
+        renderizarProdutos();
+      } else if (secao === "movimentacoes") {
+        document.getElementById("secao-movimentacoes").classList.remove("hidden");
+        renderizarMovimentacoes();
+      } else if (secao === "usuarios") {
+        document.getElementById("secao-usuarios").classList.remove("hidden");
+        carregarUsuarios();
+      } else if (secao === "logs") {
+        document.getElementById("secao-logs").classList.remove("hidden");
+        atualizarLogsPainel();
+      }
+    }
+
+    function filtrarStatus(status) {
+      filtroStatusAtual = status;
+      const titulos = {
+        todos: "Controle de Estoque",
+        normal: "Produtos em Estoque Normal",
+        baixo: "Produtos em Estoque Baixo",
+        esgotado: "Produtos Esgotados"
+      };
+      document.getElementById("titulo-secao-produtos").textContent = titulos[status] || "Controle de Estoque";
+      renderizarProdutos();
+    }
+
+    function renderizarKpis() {
+      const totalProdutos = produtosCache.length;
+      const totalUnidades = produtosCache.reduce((acc, p) => acc + Number(p.quantidade ?? 0), 0);
+      const valorPatrimonial = produtosCache.reduce(
+        (acc, p) => acc + Number(p.quantidade ?? 0) * Number(p.preco ?? 0),
+        0
+      );
+      const estoqueBaixo = produtosCache.filter(p => obterStatusProduto(p).chave === "baixo").length;
+      const esgotados = produtosCache.filter(p => obterStatusProduto(p).chave === "esgotado").length;
+
+      document.getElementById("kpi-total-produtos").textContent = totalProdutos;
+      document.getElementById("kpi-total-unidades").textContent = totalUnidades;
+      document.getElementById("kpi-valor-patrimonial").textContent = formatarMoeda(valorPatrimonial);
+      document.getElementById("kpi-estoque-baixo").textContent = estoqueBaixo;
+      document.getElementById("kpi-esgotados").textContent = esgotados;
+    }
+
+    function renderizarProdutos() {
+      const tbody = document.getElementById("tabela-produtos");
+      const filtrados = produtosCache.filter(p => {
+        const st = obterStatusProduto(p).chave;
+        if (filtroStatusAtual === "normal" && st !== "normal") return false;
+        if (filtroStatusAtual === "baixo" && st !== "baixo") return false;
+        if (filtroStatusAtual === "esgotado" && st !== "esgotado") return false;
+        return true;
+      });
+
+      if (produtoSelecionadoId && !filtrados.some(p => p.id === produtoSelecionadoId)) {
+        produtoSelecionadoId = null;
+      }
+      atualizarBotaoEditar();
+
+      if (!filtrados.length) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">Nenhum produto encontrado.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtrados
+        .map(p => {
+          const st = obterStatusProduto(p);
+          const selecionadoClass = p.id === produtoSelecionadoId ? "linha-selecionada" : "";
+          return `
+            <tr onclick="selecionarProduto(${p.id}, this)" class="hover:bg-slate-50 cursor-pointer transition ${selecionadoClass}">
+              <td class="py-2.5 px-2.5 font-mono text-slate-500">#${p.id}</td>
+              <td class="py-2.5 px-2.5 font-semibold text-slate-900">${p.nome}</td>
+              <td class="py-2.5 px-2.5">${formatarMoeda(p.preco)}</td>
+              <td class="py-2.5 px-2.5 text-emerald-700 font-medium">${p.total_entradas ?? 0}</td>
+              <td class="py-2.5 px-2.5 text-amber-700 font-medium">${p.total_saidas ?? 0}</td>
+              <td class="py-2.5 px-2.5 font-bold text-slate-900">${p.quantidade}</td>
+              <td class="py-2.5 px-2.5 text-slate-500">${formatarDataHora(p.ultima_entrada_em)}</td>
+              <td class="py-2.5 px-2.5 text-slate-500">${formatarDataHora(p.ultima_saida_em)}</td>
+              <td class="py-2.5 px-2.5">
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${st.classe}">${st.label}</span>
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    function renderizarMovimentacoes() {
+      const tbody = document.getElementById("tabela-movimentacoes");
+      if (!movimentacoesCache.length) {
+        tbody.innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">Nenhuma movimentação registrada ainda.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = movimentacoesCache
+        .map(m => {
+          const isEntrada = (m.tipo || "").toLowerCase() === "entrada";
+          const badge = isEntrada
+            ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">Entrada</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">Saída</span>`;
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-3 text-slate-500">${formatarDataHora(m.data_hora_movimentacao)}</td>
+              <td class="py-2.5 px-3 font-semibold text-slate-900">${m.produto_nome}</td>
+              <td class="py-2.5 px-3">${badge}</td>
+              <td class="py-2.5 px-3 font-semibold">${m.quantidade_movimentada}</td>
+              <td class="py-2.5 px-3">${m.total_entradas_acumulado ?? 0}</td>
+              <td class="py-2.5 px-3">${m.estoque_anterior ?? 0}</td>
+              <td class="py-2.5 px-3 font-bold">${m.estoque_restante ?? 0}</td>
+              <td class="py-2.5 px-3 text-slate-500">${formatarDataHora(m.data_hora_entrada_ref)}</td>
+              <td class="py-2.5 px-3 text-slate-500">${formatarDataHora(m.data_hora_saida_ref)}</td>
+              <td class="py-2.5 px-3 text-slate-600">${m.usuario_nome || "—"}</td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    function renderizarDashboard() {
+      const tbodyDash = document.getElementById("tabela-mov-dashboard");
+      const ultimas = movimentacoesCache.slice(0, 6);
+      if (!ultimas.length) {
+        tbodyDash.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-slate-400">Sem movimentações recentes.</td></tr>`;
+      } else {
+        tbodyDash.innerHTML = ultimas
+          .map(m => {
+            const isEntrada = (m.tipo || "").toLowerCase() === "entrada";
+            const badge = isEntrada
+              ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">Entrada</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">Saída</span>`;
+            return `
+              <tr>
+                <td class="py-2 px-3 text-slate-500">${formatarDataHora(m.data_hora_movimentacao)}</td>
+                <td class="py-2 px-3 font-semibold text-slate-900">${m.produto_nome}</td>
+                <td class="py-2 px-3">${badge}</td>
+                <td class="py-2 px-3 font-semibold">${m.quantidade_movimentada}</td>
+                <td class="py-2 px-3">${m.total_entradas_acumulado ?? 0}</td>
+                <td class="py-2 px-3 font-bold">${m.estoque_restante ?? 0}</td>
+                <td class="py-2 px-3 text-slate-500">${formatarDataHora(m.data_hora_entrada_ref)}</td>
+                <td class="py-2 px-3 text-slate-500">${formatarDataHora(m.data_hora_saida_ref)}</td>
+                <td class="py-2 px-3 text-slate-600">${m.usuario_nome || "—"}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      const labels = produtosCache.map(p => p.nome);
+      const entradas = produtosCache.map(p => Number(p.total_entradas ?? 0));
+      const saidas = produtosCache.map(p => Number(p.total_saidas ?? 0));
+      const restantes = produtosCache.map(p => Number(p.quantidade ?? 0));
+
+      const ctxFluxo = document.getElementById("grafico-fluxo").getContext("2d");
+      if (graficoFluxo) graficoFluxo.destroy();
+      graficoFluxo = new Chart(ctxFluxo, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Total Entradas", data: entradas, backgroundColor: "#10B981" },
+            { label: "Total Saídas", data: saidas, backgroundColor: "#F59E0B" },
+            { label: "Saldo Restante", data: restantes, backgroundColor: "#4A6CF7" }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+
+      const normais = produtosCache.filter(p => obterStatusProduto(p).chave === "normal").length;
+      const baixos = produtosCache.filter(p => obterStatusProduto(p).chave === "baixo").length;
+      const esgotados = produtosCache.filter(p => obterStatusProduto(p).chave === "esgotado").length;
+
+      const ctxStatus = document.getElementById("grafico-status").getContext("2d");
+      if (graficoStatus) graficoStatus.destroy();
+      graficoStatus = new Chart(ctxStatus, {
+        type: "doughnut",
+        data: {
+          labels: ["Normal", "Baixo Estoque", "Esgotado"],
+          datasets: [{
+            data: [normais, baixos, esgotados],
+            backgroundColor: ["#10B981", "#F59E0B", "#EF4444"]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+
+    function cancelarEdicaoUsuario() {
+      document.getElementById("usr-id-edicao").value = "";
+      document.getElementById("form-usuario").reset();
+      document.getElementById("titulo-form-usuario").textContent = "Novo Usuário";
+      document.getElementById("btn-salvar-usuario").textContent = "Salvar Usuário";
+      document.getElementById("btn-cancelar-edicao-usr").classList.add("hidden");
+      document.getElementById("label-usr-senha").textContent = "Senha de Acesso *";
+      document.getElementById("usr-senha").required = true;
+    }
+
+    function iniciarEdicaoUsuario(id) {
+      const u = usuariosCache.find(item => item.id === id);
+      if (!u) return;
+
+      document.getElementById("usr-id-edicao").value = u.id;
+      document.getElementById("usr-nome-completo").value = u.nome_completo || "";
+      document.getElementById("usr-funcao").value = u.funcao || u.nome_social || "";
+      document.getElementById("usr-cpf").value = u.cpf || "";
+      document.getElementById("usr-email").value = u.email || "";
+      document.getElementById("usr-matricula").value = u.matricula || "";
+      document.getElementById("usr-sexo").value = u.sexo || "";
+      document.getElementById("usr-perfil").value = u.perfil || "usuario";
+      document.getElementById("usr-senha").value = "";
+      document.getElementById("usr-senha").required = false;
+      document.getElementById("label-usr-senha").textContent = "Nova Senha (opcional)";
+      document.getElementById("titulo-form-usuario").textContent = `Editar Usuário #${u.id}`;
+      document.getElementById("btn-salvar-usuario").textContent = "Atualizar Usuário";
+      document.getElementById("btn-cancelar-edicao-usr").classList.remove("hidden");
+
+      const feedback = document.getElementById("usr-feedback");
+      feedback.classList.add("hidden");
+    }
+
+    async function excluirUsuario(id) {
+      if (!confirm("Deseja realmente excluir este usuário?")) return;
+      const feedback = document.getElementById("usr-feedback");
+      feedback.classList.add("hidden");
+
+      const resp = await fetch(`${API_URL}/users/${id}`, {
+        method: "DELETE"
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        feedback.textContent = data.detail || "Não foi possível excluir o usuário.";
+        feedback.className = "text-xs font-medium text-rose-600";
+        feedback.classList.remove("hidden");
+        return;
+      }
+
+      if (String(document.getElementById("usr-id-edicao").value) === String(id)) {
+        cancelarEdicaoUsuario();
+      }
+
+      feedback.textContent = "Usuário excluído com sucesso!";
+      feedback.className = "text-xs font-medium text-emerald-700";
+      feedback.classList.remove("hidden");
+      carregarUsuarios();
+    }
+
+    async function carregarProdutos() {
+      const resp = await fetch(`${API_URL}/products/`);
+      if (!resp.ok) throw new Error("Falha ao carregar produtos");
+      produtosCache = await resp.json();
+      renderizarKpis();
+      renderizarProdutos();
+    }
+
+    async function carregarMovimentacoes() {
+      const resp = await fetch(`${API_URL}/movements/`);
+      if (!resp.ok) throw new Error("Falha ao carregar movimentações");
+      movimentacoesCache = await resp.json();
+      renderizarMovimentacoes();
+    }
+
+    async function carregarUsuarios() {
+      const resp = await fetch(`${API_URL}/users/`);
+      if (!resp.ok) return;
+      usuariosCache = await resp.json();
+      const tbody = document.getElementById("tabela-usuarios");
+      tbody.innerHTML = usuariosCache
+        .map(u => `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-3 font-mono">${u.matricula}</td>
+            <td class="py-2.5 px-3 font-medium text-slate-900">${u.nome_completo}</td>
+            <td class="py-2.5 px-3 text-slate-600">${u.funcao || u.nome_social || "—"}</td>
+            <td class="py-2.5 px-3">${u.email}</td>
+            <td class="py-2.5 px-3 capitalize">${u.perfil}</td>
+            <td class="py-2.5 px-3 text-right whitespace-nowrap space-x-1.5">
+              <button
+                type="button"
+                onclick="iniciarEdicaoUsuario(${u.id})"
+                class="px-2.5 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium cursor-pointer"
+              >
+                Editar
+              </button>
+              <button
+                type="button"
+                onclick="excluirUsuario(${u.id})"
+                class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-medium cursor-pointer"
+              >
+                Excluir
+              </button>
+            </td>
+          </tr>
+        `)
+        .join("");
+    }
+
+    function renderizarTabelaLogs(logsApi = []) {
+      const tbody = document.getElementById("tabela-logs");
+      const sessoes = lerSessoesLog();
+      const sessaoAtivaId = localStorage.getItem(SESSAO_ATIVA_KEY);
+
+      const linhasSessao = sessoes.map(s => {
+        const estaAtivo = Boolean(s.ativo) && String(s.sessao_id) === String(sessaoAtivaId);
+        const horaEntrada = formatarHoraSomente(s.entrada_em);
+        const horaSaida = s.saida_em ? formatarHoraSomente(s.saida_em) : null;
+        const periodo = horaSaida
+          ? `Das ${horaEntrada} até ${horaSaida}`
+          : `Ativo desde ${horaEntrada}`;
+
+        const badge = estaAtivo
+          ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">ATIVO</span>`
+          : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200 text-slate-700">INATIVO</span>`;
+
+        return {
+          sortTime: new Date(s.entrada_em || 0).getTime(),
+          html: `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-3 text-slate-500">${formatarDataHora(s.entrada_em)}</td>
+              <td class="py-2.5 px-3 font-medium text-slate-900">${s.identificador} <span class="text-slate-400 font-normal">(${s.nome || ""})</span></td>
+              <td class="py-2.5 px-3 text-slate-600">${periodo}</td>
+              <td class="py-2.5 px-3">${badge}</td>
+            </tr>
+          `
+        };
+      });
+
+      const linhasApi = (logsApi || [])
+        .filter(l => l.sucesso)
+        .map(l => {
+          const coincideSessao = sessoes.some(
+            s => s.identificador === l.identificador_login &&
+                 Math.abs(new Date(s.entrada_em).getTime() - new Date(l.data_hora_acesso).getTime()) < 5000
+          );
+          if (coincideSessao) return null;
+
+          const estaAtivo = Boolean(usuarioLogado) &&
+            (l.identificador_login === usuarioLogado.email || l.identificador_login === usuarioLogado.matricula);
+          const horaEntrada = formatarHoraSomente(l.data_hora_acesso);
+
+          return {
+            sortTime: new Date(l.data_hora_acesso || 0).getTime(),
+            html: `
+              <tr class="hover:bg-slate-50">
+                <td class="py-2.5 px-3 text-slate-500">${formatarDataHora(l.data_hora_acesso)}</td>
+                <td class="py-2.5 px-3 font-medium text-slate-900">${l.identificador_login}</td>
+                <td class="py-2.5 px-3 text-slate-600">${estaAtivo ? `Ativo desde ${horaEntrada}` : `Acesso às ${horaEntrada}`}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${estaAtivo ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}">
+                    ${estaAtivo ? "ATIVO" : "INATIVO"}
+                  </span>
+                </td>
+              </tr>
+            `
+          };
+        })
+        .filter(Boolean);
+
+      const todas = [...linhasSessao, ...linhasApi].sort((a, b) => b.sortTime - a.sortTime);
+      if (!todas.length) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">Nenhum log de acesso registrado.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = todas.map(item => item.html).join("");
+    }
+
+    async function atualizarLogsPainel() {
+      const btn = document.getElementById("btn-atualizar-logs");
+      if (btn) btn.textContent = "Atualizando...";
+      try {
+        const resp = await fetch(`${API_URL}/auth/logs`);
+        const logs = resp.ok ? await resp.json() : [];
+        renderizarTabelaLogs(logs);
+      } catch {
+        renderizarTabelaLogs([]);
+      } finally {
+        if (btn) btn.textContent = "Atualizar Logs";
+      }
+    }
+
+    async function carregarLogs() {
+      await atualizarLogsPainel();
+    }
+
+    async function atualizarTudo() {
+      try {
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        if (secaoAtual === "dashboard") renderizarDashboard();
+        document.getElementById("status-dot").className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+        document.getElementById("status-dot-right").className = "w-2 h-2 rounded-full bg-emerald-400";
+        document.getElementById("status-text").textContent = "Sistema Online";
+        document.getElementById("ultima-atualizacao").textContent =
+          "Atualizado às " + new Date().toLocaleTimeString("pt-BR");
+      } catch (err) {
+        document.getElementById("status-dot").className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+        document.getElementById("status-dot-right").className = "w-2 h-2 rounded-full bg-rose-500";
+        document.getElementById("status-text").textContent = "API Offline";
+      }
+    }
+
+    function aplicarSessaoUsuario(usuario, identificadorDigitado = "") {
+      usuarioLogado = usuario;
+      localStorage.setItem("logitrack_usuario", JSON.stringify(usuario));
+
+      const sessoes = lerSessoesLog().map(s => ({ ...s, ativo: false, saida_em: s.saida_em || new Date().toISOString() }));
+      const sessaoId = String(Date.now());
+      const nomeExibido = usuario.nome_completo || usuario.funcao || usuario.nome_social || usuario.matricula || "Usuário";
+      sessoes.unshift({
+        sessao_id: sessaoId,
+        identificador: identificadorDigitado || usuario.matricula || usuario.email,
+        nome: nomeExibido,
+        perfil: usuario.perfil || "usuario",
+        entrada_em: new Date().toISOString(),
+        saida_em: null,
+        ativo: true
+      });
+      salvarSessoesLog(sessoes.slice(0, 50));
+      localStorage.setItem(SESSAO_ATIVA_KEY, sessaoId);
+
+      document.getElementById("tela-login").classList.add("hidden");
+      document.getElementById("app-shell").classList.remove("hidden");
+      document.getElementById("app-shell").classList.add("flex");
+
+      document.getElementById("usuario-nome-exibido").textContent = nomeExibido;
+      document.getElementById("usuario-meta-exibido").textContent =
+        `${usuario.matricula || ""} • ${usuario.perfil || "usuario"}`;
+
+      const partes = nomeExibido.trim().split(/\s+/);
+      const iniciais = ((partes[0]?.[0] || "") + (partes[1]?.[0] || partes[0]?.[1] || "")).toUpperCase() || "LT";
+      document.getElementById("usuario-iniciais").textContent = iniciais;
+
+      const menuAdmin = document.getElementById("menu-admin");
+      if ((usuario.perfil || "").toLowerCase() === "admin") {
+        menuAdmin.classList.remove("hidden");
+      } else {
+        menuAdmin.classList.add("hidden");
+      }
+
+      selecionarSecao("dashboard");
+      atualizarTudo();
+    }
+
+    function sairSistema() {
+      const sessaoAtivaId = localStorage.getItem(SESSAO_ATIVA_KEY);
+      if (sessaoAtivaId) {
+        const sessoes = lerSessoesLog().map(s =>
+          String(s.sessao_id) === String(sessaoAtivaId)
+            ? { ...s, ativo: false, saida_em: new Date().toISOString() }
+            : s
+        );
+        salvarSessoesLog(sessoes);
+        localStorage.removeItem(SESSAO_ATIVA_KEY);
+      }
+
+      usuarioLogado = null;
+      localStorage.removeItem("logitrack_usuario");
+      document.getElementById("app-shell").classList.add("hidden");
+      document.getElementById("app-shell").classList.remove("flex");
+      document.getElementById("tela-login").classList.remove("hidden");
+    }
+
+    document.getElementById("form-login").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const identificador = document.getElementById("login-identificador").value.trim();
+      const senha = document.getElementById("login-senha").value;
+      const erroEl = document.getElementById("login-erro");
+      erroEl.classList.add("hidden");
+
+      try {
+        const resp = await fetch(`${API_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identificador, senha })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          erroEl.textContent = data.detail || "Credenciais inválidas.";
+          erroEl.classList.remove("hidden");
+          return;
+        }
+        aplicarSessaoUsuario(data.usuario, identificador);
+      } catch (err) {
+        erroEl.textContent = "Não foi possível conectar à API.";
+        erroEl.classList.remove("hidden");
+      }
+    });
+
+    document.getElementById("form-cadastro").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nome = document.getElementById("cad-nome").value.trim();
+      const preco = parseMoeda(document.getElementById("cad-preco").value);
+      const quantidade = parseInt(document.getElementById("cad-qtd").value, 10) || 0;
+      const estoque_minimo = parseInt(document.getElementById("cad-min").value, 10) || 5;
+      const responsavel = usuarioLogado?.nome_completo || usuarioLogado?.funcao || usuarioLogado?.nome_social || "Sistema";
+
+      const resp = await fetch(`${API_URL}/products/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome,
+          preco,
+          preco_custo: preco,
+          quantidade,
+          estoque_minimo,
+          usuario_nome: responsavel
+        })
+      });
+
+      if (resp.ok) {
+        e.target.reset();
+        document.getElementById("cad-qtd").value = "0";
+        document.getElementById("cad-min").value = "5";
+        fecharModais();
+        await atualizarTudo();
+      }
+    });
+
+    document.getElementById("form-editar").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("edit-id").value;
+      const nome = document.getElementById("edit-nome").value.trim();
+      const preco = parseMoeda(document.getElementById("edit-preco").value);
+      const quantidade = parseInt(document.getElementById("edit-quantidade").value, 10) || 0;
+      const categoria = document.getElementById("edit-categoria").value.trim() || "Geral";
+      const estoque_minimo = parseInt(document.getElementById("edit-min").value, 10);
+      const erroEl = document.getElementById("edit-erro");
+
+      erroEl.textContent = "";
+      erroEl.classList.add("hidden");
+
+      const payload = { nome, preco, quantidade, categoria, estoque_minimo };
+      let resp = await fetch(`${API_URL}/products/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (resp.status === 404) {
+        resp = await fetch(`${API_URL}/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        erroEl.textContent = data.detail || "Não foi possível salvar as alterações.";
+        erroEl.classList.remove("hidden");
+        return;
+      }
+
+      fecharModais();
+      await atualizarTudo();
+    });
+
+    document.getElementById("form-movimentacao").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const tipo = document.getElementById("mov-tipo").value;
+      const produto_id = parseInt(document.getElementById("mov-produto").value, 10);
+      const quantidade = parseInt(document.getElementById("mov-qtd").value, 10);
+      const observacao = document.getElementById("mov-obs").value.trim() || null;
+      const usuario_nome = usuarioLogado?.nome_completo || usuarioLogado?.funcao || usuarioLogado?.nome_social || "Sistema";
+      const erroEl = document.getElementById("mov-erro");
+
+      erroEl.classList.add("hidden");
+      const resp = await fetch(`${API_URL}/products/movimentar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto_id, tipo, quantidade, usuario_nome, observacao })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        erroEl.textContent = data.detail || "Erro ao registrar movimentação.";
+        erroEl.classList.remove("hidden");
+        return;
+      }
+
+      document.getElementById("mov-qtd").value = "1";
+      document.getElementById("mov-obs").value = "";
+      fecharModais();
+      await atualizarTudo();
+    });
+
+    document.getElementById("form-usuario").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const feedback = document.getElementById("usr-feedback");
+      feedback.classList.add("hidden");
+
+      const idEdicao = document.getElementById("usr-id-edicao").value;
+      const funcaoVal = document.getElementById("usr-funcao").value.trim();
+      const senhaVal = document.getElementById("usr-senha").value;
+
+      const payload = {
+        nome_completo: document.getElementById("usr-nome-completo").value.trim(),
+        funcao: funcaoVal,
+        nome_social: funcaoVal,
+        cpf: document.getElementById("usr-cpf").value.trim(),
+        email: document.getElementById("usr-email").value.trim(),
+        matricula: document.getElementById("usr-matricula").value.trim(),
+        sexo: document.getElementById("usr-sexo").value,
+        perfil: document.getElementById("usr-perfil").value
+      };
+
+      if (senhaVal) {
+        payload.senha = senhaVal;
+      }
+
+      const url = idEdicao ? `${API_URL}/users/${idEdicao}` : `${API_URL}/users/`;
+      const method = idEdicao ? "PUT" : "POST";
+
+      const resp = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        feedback.textContent = data.detail || "Erro ao salvar usuário.";
+        feedback.className = "text-xs font-medium text-rose-600";
+        feedback.classList.remove("hidden");
+        return;
+      }
+
+      const eraEdicao = Boolean(idEdicao);
+      cancelarEdicaoUsuario();
+      feedback.textContent = eraEdicao ? "Usuário atualizado com sucesso!" : "Usuário cadastrado com sucesso!";
+      feedback.className = "text-xs font-medium text-emerald-700";
+      feedback.classList.remove("hidden");
+      carregarUsuarios();
+    });
+  </script>
+</body>
+</html>

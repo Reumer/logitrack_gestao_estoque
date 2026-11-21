@@ -1,0 +1,41 @@
+services:
+  logitrack_mysql:
+    image: mysql:8.4.9
+    container_name: logitrack_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Rvm162207
+      MYSQL_DATABASE: logitrack_mysql
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pRvm162207"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: logitrack_api
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      logitrack_mysql:
+        condition: service_healthy
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: .
+    container_name: logitrack_frontend
+    restart: always
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    command: python -m http.server 8501 --bind 0.0.0.0
+
+volumes:
+  mysql_data:

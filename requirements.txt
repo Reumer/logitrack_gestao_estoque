@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+streamlit
+requests
+alembic
+pydantic
+email-validator
