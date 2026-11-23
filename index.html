@@ -138,7 +138,7 @@
         <div class="flex items-center gap-3">
           <div class="text-right leading-tight">
             <div id="usuario-nome-exibido" class="text-xs font-semibold text-slate-800">Usuário</div>
-            <div id="usuario-meta-exibido" class="text-[11px] text-slate-400">Acesso registrado</div>
+            <div id="usuario-meta-exibido" class="text-[11px] text-slate-400">Acesso registrado • Empresa #1</div>
           </div>
           <div id="usuario-iniciais" class="w-8 h-8 rounded-full bg-[#1B2A3A] text-white flex items-center justify-center text-xs font-bold">
             LT
@@ -525,14 +525,6 @@
             <h1 class="text-xl font-bold text-slate-900">Logs de Acesso</h1>
             <p class="text-xs text-slate-500 mt-0.5">Registro de quem acessou o sistema, período de atividade e status ATIVO / INATIVO.</p>
           </div>
-          <button
-            type="button"
-            id="btn-atualizar-logs"
-            onclick="atualizarLogsPainel()"
-            class="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 cursor-pointer"
-          >
-            Atualizar Logs
-          </button>
         </div>
 
         <div class="bg-white rounded-lg p-6">
@@ -691,6 +683,10 @@
 
     let graficoFluxo = null;
     let graficoStatus = null;
+
+    function obterEmpresaIdAtiva() {
+      return Number(usuarioLogado?.empresa_id ?? 1) || 1;
+    }
 
     function lerSessoesLog() {
       try {
@@ -1177,7 +1173,8 @@
     }
 
     async function carregarProdutos() {
-      const resp = await fetch(`${API_URL}/products/`);
+      const empresaId = obterEmpresaIdAtiva();
+      const resp = await fetch(`${API_URL}/products/?empresa_id=${empresaId}`);
       if (!resp.ok) throw new Error("Falha ao carregar produtos");
       produtosCache = await resp.json();
       renderizarKpis();
@@ -1185,14 +1182,16 @@
     }
 
     async function carregarMovimentacoes() {
-      const resp = await fetch(`${API_URL}/movements/`);
+      const empresaId = obterEmpresaIdAtiva();
+      const resp = await fetch(`${API_URL}/movements/?empresa_id=${empresaId}`);
       if (!resp.ok) throw new Error("Falha ao carregar movimentações");
       movimentacoesCache = await resp.json();
       renderizarMovimentacoes();
     }
 
     async function carregarUsuarios() {
-      const resp = await fetch(`${API_URL}/users/`);
+      const empresaId = obterEmpresaIdAtiva();
+      const resp = await fetch(`${API_URL}/users/?empresa_id=${empresaId}`);
       if (!resp.ok) return;
       usuariosCache = await resp.json();
       const tbody = document.getElementById("tabela-usuarios");
@@ -1227,7 +1226,8 @@
 
     function renderizarTabelaLogs(logsApi = []) {
       const tbody = document.getElementById("tabela-logs");
-      const sessoes = lerSessoesLog();
+      const empresaId = obterEmpresaIdAtiva();
+      const sessoes = lerSessoesLog().filter(s => (s.empresa_id ?? 1) === empresaId);
       const sessaoAtivaId = localStorage.getItem(SESSAO_ATIVA_KEY);
 
       const linhasSessao = sessoes.map(s => {
@@ -1295,16 +1295,13 @@
     }
 
     async function atualizarLogsPainel() {
-      const btn = document.getElementById("btn-atualizar-logs");
-      if (btn) btn.textContent = "Atualizando...";
+      const empresaId = obterEmpresaIdAtiva();
       try {
-        const resp = await fetch(`${API_URL}/auth/logs`);
+        const resp = await fetch(`${API_URL}/auth/logs?empresa_id=${empresaId}`);
         const logs = resp.ok ? await resp.json() : [];
         renderizarTabelaLogs(logs);
       } catch {
         renderizarTabelaLogs([]);
-      } finally {
-        if (btn) btn.textContent = "Atualizar Logs";
       }
     }
 
@@ -1332,11 +1329,13 @@
       usuarioLogado = usuario;
       localStorage.setItem("logitrack_usuario", JSON.stringify(usuario));
 
+      const empresaId = obterEmpresaIdAtiva();
       const sessoes = lerSessoesLog().map(s => ({ ...s, ativo: false, saida_em: s.saida_em || new Date().toISOString() }));
       const sessaoId = String(Date.now());
       const nomeExibido = usuario.nome_completo || usuario.funcao || usuario.nome_social || usuario.matricula || "Usuário";
       sessoes.unshift({
         sessao_id: sessaoId,
+        empresa_id: empresaId,
         identificador: identificadorDigitado || usuario.matricula || usuario.email,
         nome: nomeExibido,
         perfil: usuario.perfil || "usuario",
@@ -1353,7 +1352,7 @@
 
       document.getElementById("usuario-nome-exibido").textContent = nomeExibido;
       document.getElementById("usuario-meta-exibido").textContent =
-        `${usuario.matricula || ""} • ${usuario.perfil || "usuario"}`;
+        `${usuario.matricula || ""} • ${usuario.perfil || "usuario"} • Empresa #${empresaId}`;
 
       const partes = nomeExibido.trim().split(/\s+/);
       const iniciais = ((partes[0]?.[0] || "") + (partes[1]?.[0] || partes[0]?.[1] || "")).toUpperCase() || "LT";
@@ -1422,11 +1421,13 @@
       const quantidade = parseInt(document.getElementById("cad-qtd").value, 10) || 0;
       const estoque_minimo = parseInt(document.getElementById("cad-min").value, 10) || 5;
       const responsavel = usuarioLogado?.nome_completo || usuarioLogado?.funcao || usuarioLogado?.nome_social || "Sistema";
+      const empresa_id = obterEmpresaIdAtiva();
 
       const resp = await fetch(`${API_URL}/products/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          empresa_id,
           nome,
           preco,
           preco_custo: preco,
@@ -1491,13 +1492,14 @@
       const quantidade = parseInt(document.getElementById("mov-qtd").value, 10);
       const observacao = document.getElementById("mov-obs").value.trim() || null;
       const usuario_nome = usuarioLogado?.nome_completo || usuarioLogado?.funcao || usuarioLogado?.nome_social || "Sistema";
+      const empresa_id = obterEmpresaIdAtiva();
       const erroEl = document.getElementById("mov-erro");
 
       erroEl.classList.add("hidden");
       const resp = await fetch(`${API_URL}/products/movimentar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produto_id, tipo, quantidade, usuario_nome, observacao })
+        body: JSON.stringify({ empresa_id, produto_id, tipo, quantidade, usuario_nome, observacao })
       });
 
       if (!resp.ok) {
@@ -1521,8 +1523,10 @@
       const idEdicao = document.getElementById("usr-id-edicao").value;
       const funcaoVal = document.getElementById("usr-funcao").value.trim();
       const senhaVal = document.getElementById("usr-senha").value;
+      const empresa_id = obterEmpresaIdAtiva();
 
       const payload = {
+        empresa_id,
         nome_completo: document.getElementById("usr-nome-completo").value.trim(),
         funcao: funcaoVal,
         nome_social: funcaoVal,

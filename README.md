@@ -1,26 +1,27 @@
-# 📦 LogiTrack - Sistema de Gestão de Estoque & KPIs Logísticos
+# 📦 LogiTrack — Sistema de Gestão de Estoque & KPIs Logísticos
 
-Projeto desenvolvido em Python voltado para o controle operacional de armazéns, cálculo de indicadores de desempenho (KPIs) e controle de estoque mínimo.
+Sistema web de controle de estoque, movimentação de mercadorias, indicadores (KPIs), gestão de usuários, logs de acesso e base multi-empresa (`empresa_id`).
 
 ## 📌 Funcionalidades
 
-- **Cadastro de SKUs:** Registo completo de produtos com código, categoria, quantidade, custo e estoque de segurança.
-- **Movimentação de Estoque:** Módulos para entrada e saída de mercadorias com trava de integridade contra saldo negativo.
-- **Dashboard de KPIs Logísticos:**
-  - Valor Total Imobilizado em Estoque (R$).
-  - Alerta de Ponto de Pedido / Ressuprimento Automático.
-  - Total de SKUs ativos.
-- **Persistência de Dados:** Gravação e leitura automática dos dados em formato `.csv`.
+- **Controle de Produtos e Saldo:** Cadastro, edição e exclusão de itens com preço, estoque mínimo, entradas/saídas acumuladas e datas/horas de referência.
+- **Entradas e Saídas com Trava de Saldo:** Registro de movimentações com validação para impedir saídas maiores que o saldo disponível e geração automática de histórico.
+- **Dashboard Executivo:**
+  - KPIs de Total de Produtos, Unidades Restantes, Valor Patrimonial, Itens em Estoque Baixo e Produtos Esgotados.
+  - Gráficos interativos de fluxo (entradas, saídas e saldo restante) e distribuição de status do catálogo.
+- **Usuários e Logs de Acesso:** Cadastro, edição e exclusão de usuários com perfis (`admin` e `usuario`), registro de acessos e política configurável de retenção de logs (`LOG_RETENTION_DAYS`, padrão de 30 dias).
+- **Base Multi-Empresa (SaaS):** Estrutura com `empresa_id` e empresa padrão inicial para isolamento de dados entre empresas.
 
 ## 🛠️ Tecnologias Utilizadas
 
-- **Linguagem:** Python 3.x
-- **Conceitos:** Programação Orientada a Objetos (POO), Manipulação de Arquivos (`csv`), Módulos.
-- **Ambiente de Desenvolvimento:** PyCharm
+- **Backend:** Python 3, FastAPI, SQLAlchemy, Pydantic
+- **Banco de Dados:** MySQL
+- **Frontend:** HTML5, Tailwind CSS, Chart.js, JavaScript
+- **Infraestrutura e Ferramentas:** Docker / Docker Compose, Git/GitHub, PyCharm
 
-## 🚀 Como Executar o Projeto
+## 🚀 Como Executar com Docker
 
-1. Certifique-se de ter o Python 3 instalado.
-2. Clone este repositório:
+1. Clone o repositório:
    ```bash
-   git clone [https://github.com/SEU_USUARIO/logitrack.git](https://github.com/SEU_USUARIO/logitrack.git)   
+   git clone [https://github.com/Reumer/logitrack_gestao_estoque.git](https://github.com/Reumer/logitrack_gestao_estoque.git)
+   cd logitrack_gestao_estoque

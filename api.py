@@ -10,9 +10,16 @@ from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, engine, init_db
-from models import LogAcessoModel, MovimentacaoEstoqueModel, UsuarioModel
-from produto import ProdutoModel
+from models import (
+    EmpresaModel,
+    LogAcessoModel,
+    MovimentacaoEstoqueModel,
+    ProdutoModel,
+    UsuarioModel,
+)
 from schemas import (
+    EmpresaCreate,
+    EmpresaResponse,
     LogAcessoResponse,
     LoginRequest,
     LoginResponse,
@@ -39,7 +46,15 @@ def obter_origens_cors() -> List[str]:
     return [origem.strip() for origem in raw.split(",") if origem.strip()]
 
 
-app = FastAPI(title="LogiTrack API", version="1.2.0")
+def obter_dias_retencao_logs() -> int:
+    raw = os.getenv("LOG_RETENTION_DAYS", "30").strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return 30
+
+
+app = FastAPI(title="LogiTrack API", version="1.3.0")
 
 origens_cors = obter_origens_cors()
 app.add_middleware(
@@ -52,6 +67,7 @@ app.add_middleware(
 
 
 class UsuarioUpdatePayload(BaseModel):
+    empresa_id: Optional[int] = None
     nome_completo: Optional[str] = None
     funcao: Optional[str] = None
     nome_social: Optional[str] = None
@@ -89,13 +105,17 @@ def verify_password(plain_password: str, stored_hash: str) -> bool:
     return derived == original_hash
 
 
-def garantir_colunas_produtos():
+def garantir_colunas_e_multitenant():
     comandos = [
         "ALTER TABLE produtos ADD COLUMN total_entradas INT NOT NULL DEFAULT 0",
         "ALTER TABLE produtos ADD COLUMN total_saidas INT NOT NULL DEFAULT 0",
         "ALTER TABLE produtos ADD COLUMN ultima_entrada_em DATETIME NULL",
         "ALTER TABLE produtos ADD COLUMN ultima_saida_em DATETIME NULL",
         "ALTER TABLE usuarios ADD COLUMN funcao VARCHAR(120) NULL",
+        "ALTER TABLE usuarios ADD COLUMN empresa_id INT NOT NULL DEFAULT 1",
+        "ALTER TABLE produtos ADD COLUMN empresa_id INT NOT NULL DEFAULT 1",
+        "ALTER TABLE movimentacoes_estoque ADD COLUMN empresa_id INT NOT NULL DEFAULT 1",
+        "ALTER TABLE logs_acesso ADD COLUMN empresa_id INT NOT NULL DEFAULT 1",
     ]
     with engine.connect() as conn:
         for sql in comandos:
@@ -106,7 +126,25 @@ def garantir_colunas_produtos():
                 conn.rollback()
 
 
-def garantir_admin_inicial(db: Session):
+def garantir_empresa_padrao(db: Session) -> EmpresaModel:
+    empresa = db.query(EmpresaModel).filter(EmpresaModel.id == 1).first()
+    if not empresa:
+        empresa = db.query(EmpresaModel).first()
+    if not empresa:
+        empresa = EmpresaModel(
+            id=1,
+            nome="Empresa Padrão",
+            cnpj=None,
+            ativo=True,
+            criado_em=agora_br(),
+        )
+        db.add(empresa)
+        db.commit()
+        db.refresh(empresa)
+    return empresa
+
+
+def garantir_admin_inicial(db: Session, empresa_id: int):
     admin_existente = db.query(UsuarioModel).filter(UsuarioModel.perfil == "admin").first()
     if not admin_existente:
         admin_email = os.getenv("INITIAL_ADMIN_EMAIL", "admin@logitrack.local").strip()
@@ -114,8 +152,10 @@ def garantir_admin_inicial(db: Session):
         admin_senha = os.getenv("INITIAL_ADMIN_PASSWORD", "Admin@123")
 
         admin_padrao = UsuarioModel(
+            empresa_id=empresa_id,
             nome_completo="Administrador LogiTrack",
             nome_social=None,
+            funcao="Administrador",
             cpf="000.000.000-00",
             email=admin_email,
             matricula=admin_matricula,
@@ -125,8 +165,6 @@ def garantir_admin_inicial(db: Session):
             ativo=True,
             criado_em=agora_br(),
         )
-        if hasattr(admin_padrao, "funcao"):
-            admin_padrao.funcao = "Administrador"
         db.add(admin_padrao)
         db.commit()
 
@@ -182,14 +220,30 @@ def sincronizar_produtos_com_historico(db: Session):
     db.commit()
 
 
+def limpar_logs_antigos(db: Session, dias: Optional[int] = None) -> int:
+    limite_dias = obter_dias_retencao_logs() if dias is None else dias
+    if limite_dias <= 0:
+        return 0
+    corte = agora_br() - timedelta(days=limite_dias)
+    removidos = (
+        db.query(LogAcessoModel)
+        .filter(LogAcessoModel.data_hora_acesso < corte)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return removidos
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
-    garantir_colunas_produtos()
+    garantir_colunas_e_multitenant()
     db = SessionLocal()
     try:
-        garantir_admin_inicial(db)
+        empresa = garantir_empresa_padrao(db)
+        garantir_admin_inicial(db, empresa.id)
         sincronizar_produtos_com_historico(db)
+        limpar_logs_antigos(db)
     finally:
         db.close()
 
@@ -200,6 +254,32 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# --- Empresas (Multi-Tenant SaaS) ---
+@app.post("/companies/", response_model=EmpresaResponse, status_code=201)
+def criar_empresa(dados: EmpresaCreate, db: Session = Depends(get_db)):
+    cnpj_limpo = dados.cnpj.strip() if dados.cnpj else None
+    if cnpj_limpo:
+        existente = db.query(EmpresaModel).filter(EmpresaModel.cnpj == cnpj_limpo).first()
+        if existente:
+            raise HTTPException(status_code=400, detail="CNPJ já cadastrado")
+
+    nova_empresa = EmpresaModel(
+        nome=dados.nome.strip(),
+        cnpj=cnpj_limpo,
+        ativo=True,
+        criado_em=agora_br(),
+    )
+    db.add(nova_empresa)
+    db.commit()
+    db.refresh(nova_empresa)
+    return nova_empresa
+
+
+@app.get("/companies/", response_model=List[EmpresaResponse])
+def listar_empresas(db: Session = Depends(get_db)):
+    return db.query(EmpresaModel).order_by(EmpresaModel.id.asc()).all()
 
 
 # --- Autenticação e Usuários ---
@@ -219,8 +299,11 @@ def login(credenciais: LoginRequest, db: Session = Depends(get_db)):
         .first()
     )
 
+    empresa_id_log = usuario.empresa_id if usuario and usuario.empresa_id else 1
+
     if not usuario or not verify_password(credenciais.senha, usuario.senha_hash):
         log_falha = LogAcessoModel(
+            empresa_id=empresa_id_log,
             usuario_id=usuario.id if usuario else None,
             identificador_login=identificador,
             data_hora_acesso=agora,
@@ -232,6 +315,7 @@ def login(credenciais: LoginRequest, db: Session = Depends(get_db)):
 
     if not usuario.ativo:
         log_inativo = LogAcessoModel(
+            empresa_id=empresa_id_log,
             usuario_id=usuario.id,
             identificador_login=identificador,
             data_hora_acesso=agora,
@@ -242,6 +326,7 @@ def login(credenciais: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Usuário inativo")
 
     log_sucesso = LogAcessoModel(
+        empresa_id=empresa_id_log,
         usuario_id=usuario.id,
         identificador_login=identificador,
         data_hora_acesso=agora,
@@ -265,6 +350,8 @@ def cadastrar_usuario(
     admin_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    empresa_id = dados.empresa_id or 1
+
     if admin_id is not None:
         admin = db.query(UsuarioModel).filter(UsuarioModel.id == admin_id).first()
         if not admin or admin.perfil != "admin" or not admin.ativo:
@@ -272,6 +359,12 @@ def cadastrar_usuario(
                 status_code=403,
                 detail="Apenas administradores ativos podem cadastrar novos usuários",
             )
+        if dados.empresa_id is None and admin.empresa_id:
+            empresa_id = admin.empresa_id
+
+    empresa = db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
     cpf_limpo = dados.cpf.strip()
     email_limpo = dados.email.strip().lower()
@@ -306,8 +399,10 @@ def cadastrar_usuario(
     funcao_limpa = funcao_texto.strip() if funcao_texto else None
 
     novo_usuario = UsuarioModel(
+        empresa_id=empresa_id,
         nome_completo=dados.nome_completo.strip(),
         nome_social=funcao_limpa,
+        funcao=funcao_limpa,
         cpf=cpf_limpo,
         email=email_limpo,
         matricula=matricula_limpa,
@@ -317,8 +412,6 @@ def cadastrar_usuario(
         ativo=True,
         criado_em=agora_br(),
     )
-    if hasattr(novo_usuario, "funcao"):
-        novo_usuario.funcao = funcao_limpa
 
     db.add(novo_usuario)
     db.commit()
@@ -327,8 +420,14 @@ def cadastrar_usuario(
 
 
 @app.get("/users/", response_model=List[UsuarioResponse])
-def listar_usuarios(db: Session = Depends(get_db)):
-    return db.query(UsuarioModel).order_by(UsuarioModel.id.desc()).all()
+def listar_usuarios(
+    empresa_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(UsuarioModel)
+    if empresa_id is not None:
+        query = query.filter(UsuarioModel.empresa_id == empresa_id)
+    return query.order_by(UsuarioModel.id.desc()).all()
 
 
 @app.put("/users/{usuario_id}", response_model=UsuarioResponse)
@@ -340,6 +439,12 @@ def atualizar_usuario(
     usuario = db.query(UsuarioModel).filter(UsuarioModel.id == usuario_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if dados.empresa_id is not None:
+        empresa = db.query(EmpresaModel).filter(EmpresaModel.id == dados.empresa_id).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        usuario.empresa_id = dados.empresa_id
 
     if dados.cpf is not None:
         cpf_limpo = dados.cpf.strip()
@@ -381,8 +486,7 @@ def atualizar_usuario(
     if funcao_nova is not None:
         funcao_limpa = funcao_nova.strip() or None
         usuario.nome_social = funcao_limpa
-        if hasattr(usuario, "funcao"):
-            usuario.funcao = funcao_limpa
+        usuario.funcao = funcao_limpa
 
     if dados.sexo is not None:
         usuario.sexo = dados.sexo.strip()
@@ -412,22 +516,55 @@ def excluir_usuario(usuario_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/auth/logs", response_model=List[LogAcessoResponse])
-def listar_logs_acesso(db: Session = Depends(get_db)):
-    return db.query(LogAcessoModel).order_by(LogAcessoModel.data_hora_acesso.desc()).all()
+def listar_logs_acesso(
+    empresa_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    limpar_logs_antigos(db)
+    query = db.query(LogAcessoModel)
+    if empresa_id is not None:
+        query = query.filter(LogAcessoModel.empresa_id == empresa_id)
+    return query.order_by(LogAcessoModel.data_hora_acesso.desc()).all()
+
+
+@app.delete("/auth/logs/cleanup")
+def executar_limpeza_logs(
+    dias: Optional[int] = Query(default=None, ge=0),
+    db: Session = Depends(get_db),
+):
+    removidos = limpar_logs_antigos(db, dias=dias)
+    dias_aplicados = obter_dias_retencao_logs() if dias is None else dias
+    return {
+        "mensagem": "Limpeza de logs concluída",
+        "registros_removidos": removidos,
+        "retencao_dias": dias_aplicados,
+    }
 
 
 # --- Produtos & Movimentações ---
 @app.get("/products/", response_model=List[ProdutoResponse])
-def listar_produtos(db: Session = Depends(get_db)):
-    return db.query(ProdutoModel).all()
+def listar_produtos(
+    empresa_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(ProdutoModel)
+    if empresa_id is not None:
+        query = query.filter(ProdutoModel.empresa_id == empresa_id)
+    return query.all()
 
 
 @app.post("/products/", response_model=ProdutoResponse)
 def criar_produto(produto: ProdutoCreate, db: Session = Depends(get_db)):
+    empresa_id = produto.empresa_id or 1
+    empresa = db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
     agora = agora_br()
     qtd_inicial = max(0, produto.quantidade)
 
     novo_produto = ProdutoModel(
+        empresa_id=empresa_id,
         sku=produto.sku,
         nome=produto.nome,
         categoria=produto.categoria,
@@ -446,6 +583,7 @@ def criar_produto(produto: ProdutoCreate, db: Session = Depends(get_db)):
 
     if qtd_inicial > 0:
         mov = MovimentacaoEstoqueModel(
+            empresa_id=empresa_id,
             produto_id=novo_produto.id,
             produto_nome=novo_produto.nome,
             tipo="entrada",
@@ -470,6 +608,9 @@ def movimentar_estoque(dados: MovimentacaoCreate, db: Session = Depends(get_db))
     produto = db.query(ProdutoModel).filter(ProdutoModel.id == dados.produto_id).first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    if dados.empresa_id is not None and produto.empresa_id != dados.empresa_id:
+        raise HTTPException(status_code=403, detail="Produto pertence a outra empresa")
 
     if dados.quantidade <= 0:
         raise HTTPException(status_code=400, detail="A quantidade deve ser maior que zero")
@@ -498,6 +639,7 @@ def movimentar_estoque(dados: MovimentacaoCreate, db: Session = Depends(get_db))
         produto.ultima_saida_em = agora
 
     movimentacao = MovimentacaoEstoqueModel(
+        empresa_id=produto.empresa_id or 1,
         produto_id=produto.id,
         produto_nome=produto.nome,
         tipo=tipo,
@@ -519,12 +661,14 @@ def movimentar_estoque(dados: MovimentacaoCreate, db: Session = Depends(get_db))
 
 
 @app.get("/movements/", response_model=List[MovimentacaoResponse])
-def listar_movimentacoes(db: Session = Depends(get_db)):
-    return (
-        db.query(MovimentacaoEstoqueModel)
-        .order_by(MovimentacaoEstoqueModel.data_hora_movimentacao.desc())
-        .all()
-    )
+def listar_movimentacoes(
+    empresa_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(MovimentacaoEstoqueModel)
+    if empresa_id is not None:
+        query = query.filter(MovimentacaoEstoqueModel.empresa_id == empresa_id)
+    return query.order_by(MovimentacaoEstoqueModel.data_hora_movimentacao.desc()).all()
 
 
 @app.put("/products/{produto_id}", response_model=ProdutoResponse)
@@ -565,6 +709,7 @@ def deletar_produto(
 
     agora = agora_br()
     mov_exclusao = MovimentacaoEstoqueModel(
+        empresa_id=produto.empresa_id or 1,
         produto_id=produto.id,
         produto_nome=produto.nome,
         tipo="exclusao",

@@ -3,7 +3,24 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 
+class EmpresaCreate(BaseModel):
+    nome: str
+    cnpj: Optional[str] = None
+
+
+class EmpresaResponse(BaseModel):
+    id: int
+    nome: str
+    cnpj: Optional[str] = None
+    ativo: bool
+    criado_em: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ProdutoCreate(BaseModel):
+    empresa_id: Optional[int] = 1
     sku: Optional[str] = None
     nome: str
     categoria: Optional[str] = "Geral"
@@ -26,6 +43,7 @@ class ProdutoUpdate(BaseModel):
 
 class ProdutoResponse(BaseModel):
     id: int
+    empresa_id: int = 1
     sku: Optional[str] = None
     nome: str
     categoria: Optional[str] = "Geral"
@@ -43,6 +61,7 @@ class ProdutoResponse(BaseModel):
 
 
 class MovimentacaoCreate(BaseModel):
+    empresa_id: Optional[int] = None
     produto_id: int
     tipo: str
     quantidade: int
@@ -52,6 +71,7 @@ class MovimentacaoCreate(BaseModel):
 
 class MovimentacaoResponse(BaseModel):
     id: int
+    empresa_id: int = 1
     produto_id: int
     produto_nome: str
     tipo: str
@@ -70,8 +90,10 @@ class MovimentacaoResponse(BaseModel):
 
 
 class UsuarioCreate(BaseModel):
+    empresa_id: Optional[int] = 1
     nome_completo: str
     nome_social: Optional[str] = None
+    funcao: Optional[str] = None
     cpf: str
     email: EmailStr
     matricula: str
@@ -82,8 +104,10 @@ class UsuarioCreate(BaseModel):
 
 class UsuarioResponse(BaseModel):
     id: int
+    empresa_id: int = 1
     nome_completo: str
     nome_social: Optional[str] = None
+    funcao: Optional[str] = None
     cpf: str
     email: str
     matricula: str
@@ -110,6 +134,7 @@ class LoginResponse(BaseModel):
 
 class LogAcessoResponse(BaseModel):
     id: int
+    empresa_id: int = 1
     usuario_id: Optional[int] = None
     identificador_login: str
     data_hora_acesso: datetime
